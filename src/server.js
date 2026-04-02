@@ -10,7 +10,7 @@ const path = require('path');
 const os = require('os');
 
 const PORT = Number(process.env.PORT || 7478);
-const HOST = process.env.BRIDGE_HOST || '127.0.0.1';
+const HOST = process.env.BRIDGE_HOST || (process.env.PORT || process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_ID ? '0.0.0.0' : '127.0.0.1');
 const STRICT_MODE = process.env.BRIDGE_STRICT_MODE === '1';
 const BRIDGE_TOKEN = (process.env.BRIDGE_TOKEN || '').trim();
 const MAX_COMMAND_LENGTH = 512;

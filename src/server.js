@@ -479,6 +479,12 @@ wss.on('connection', (ws, req) => {
         });
         break;
 
+      case 'GEMINI_VISION_TASK':
+        handleGeminiVisionTask(msg, ws).catch(err => {
+          safeSend(ws, { type: 'GEMINI_VISION_RESULT', requestId: msg.requestId, success: false, error: err.message });
+        });
+        break;
+
       default:
         safeSend(ws, { type: 'BRIDGE_ERROR', success: false, error: `Unknown message type: ${msg.type}` });
         break;
@@ -500,6 +506,55 @@ wss.on('connection', (ws, req) => {
     }
   });
 });
+
+// ─── Gemini Vision AI (Backend) ───────────────────────────────────────────────
+async function handleGeminiVisionTask(msg, ws) {
+  const { requestId, prompt, imageB64, apiKey } = msg;
+
+  try {
+    console.log(`[GEMINI] Processing vision task ${requestId}...`);
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/png', data: imageB64 } }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      throw new Error(`Google API Error: ${resp.status} - ${errorText}`);
+    }
+
+    const data = await resp.json();
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!answer) {
+      throw new Error('Gemini không trả về nội dung đáp án (Có thể do chính sách an toàn).');
+    }
+
+    safeSend(ws, {
+      type: 'GEMINI_VISION_RESULT',
+      requestId,
+      success: true,
+      answer
+    });
+    console.log(`[GEMINI] Task ${requestId} completed successfully.`);
+  } catch (err) {
+    console.error(`[GEMINI] Task ${requestId} failed:`, err.message);
+    safeSend(ws, {
+      type: 'GEMINI_VISION_RESULT',
+      requestId,
+      success: false,
+      error: err.message
+    });
+  }
+}
 
 server.listen(PORT, HOST, () => {
   console.log('\n╔══════════════════════════════════════════╗');
